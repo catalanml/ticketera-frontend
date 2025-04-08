@@ -37,7 +37,7 @@ const Login: React.FC = () => {
             </a>
 
             <div className="relative mt-12 w-full max-w-md px-4">
-                <div className="h-px w-full bg-gradient-to-r from-transparent via-stone-300 dark:via-sky-300 to-transparent mb-[-1px]" />
+                <div className="h-px w-full bg-gradient-to-r from-transparent via-stone-300 dark:via-white-300 to-transparent mb-[-1px]" />
 
                 <div className="rounded-xl border border-stone-200 dark:border-white/10 bg-white dark:bg-black p-6 shadow-md">
                     <h3 className="text-xl font-semibold leading-6 tracking-tight text-stone-900 dark:text-white">Iniciar sesión</h3>
@@ -46,7 +46,7 @@ const Login: React.FC = () => {
                     </p>
 
                     <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-                        <div className="group relative rounded-lg border border-stone-300 dark:border-white/20 focus-within:border-stone-500 dark:focus-within:border-sky-400 px-3 pb-1.5 pt-2.5 focus-within:ring focus-within:ring-stone-500/50 dark:focus-within:ring-sky-400/20">
+                        <div className="group relative rounded-lg border border-stone-300 dark:border-white/20 focus-within:border-stone-500 dark:focus-within:border-white-400 px-3 pb-1.5 pt-2.5 focus-within:ring focus-within:ring-stone-500/50 dark:focus-within:ring-white-400/20">
                             <label className="text-xs text-stone-500 dark:text-white/50 group-focus-within:text-stone-900 dark:group-focus-within:text-white">Correo electrónico</label>
                             <div className="flex items-center gap-2">
                                 <EnvelopeIcon className="h-5 w-5 text-stone-400 dark:text-white/40" />
@@ -61,7 +61,7 @@ const Login: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="group relative rounded-lg border border-stone-300 dark:border-white/20 focus-within:border-stone-500 dark:focus-within:border-sky-400 px-3 pb-1.5 pt-2.5 focus-within:ring focus-within:ring-stone-500/50 dark:focus-within:ring-sky-400/20">
+                        <div className="group relative rounded-lg border border-stone-300 dark:border-white/20 focus-within:border-stone-500 dark:focus-within:border-white-400 px-3 pb-1.5 pt-2.5 focus-within:ring focus-within:ring-stone-500/50 dark:focus-within:ring-white-400/20">
                             <label className="text-xs text-stone-500 dark:text-white/50 group-focus-within:text-stone-900 dark:group-focus-within:text-white">Contraseña</label>
                             <div className="flex items-center gap-2">
                                 <LockClosedIcon className="h-5 w-5 text-stone-400 dark:text-white/40" />
