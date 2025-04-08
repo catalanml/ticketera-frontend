@@ -2,14 +2,26 @@ import React, { useState } from 'react';
 import ThemeToggle from "../components/ThemeToggle";
 import { LockClosedIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import TicketIcon from "../components/TicketIcon";
+import { loginRequest } from '../services/auth/authService';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 const Login: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const navigate = useNavigate();
+    const { setIsAuthenticated } = useAuth();
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        console.log('Logging in with', email, password);
+        try {
+            const response = await loginRequest(email, password);
+            localStorage.setItem('token', response.token);
+            setIsAuthenticated(true);
+            navigate('/dashboard');
+        } catch (error) {
+            console.error('Error al iniciar sesión:', error);
+        }
     };
 
     return (
