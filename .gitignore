@@ -26,3 +26,4 @@ dist-ssr
 *.env.*
 .gitignore
 dev.nix
+ticketera-frontend-prompt.md
