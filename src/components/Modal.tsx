@@ -19,7 +19,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center backdrop-blur-sm"
+      className="fixed inset-0 bg-[rgba(0,0,0,0.5)] z-50 flex justify-center items-center" // Use explicit RGBA for background
+      style={{ backdropFilter: 'blur(5px)' }}
       onClick={handleOverlayClick}
       ref={modalRef}
     >
