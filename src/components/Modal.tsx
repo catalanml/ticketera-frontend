@@ -31,7 +31,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
             </svg>
           </button>
         </div>
-        <div className="mt-4">
+        {/* Removed mt-4 from this div */}
+        <div>
           {children}
         </div>
       </div>
