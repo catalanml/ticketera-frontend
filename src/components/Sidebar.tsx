@@ -1,37 +1,29 @@
 // src/components/Sidebar.tsx
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
 import TicketIcon from './TicketIcon';
-import NavButton from './NavButton'; // Import the new NavButton component
-import Modal from './Modal'; // Import the new Modal component
-import TaskForm from './TaskForm'; // Import the new TaskForm component
+import NavButton from './NavButton';
 import { useAuth } from '../hooks/useAuth';
 import {
     HomeIcon,
     ClipboardDocumentListIcon,
     Cog6ToothIcon,
     ArrowLeftOnRectangleIcon,
-    PlusIcon // Assuming you want a plus icon for adding a task
+    PlusIcon
 } from '@heroicons/react/24/outline';
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+    onOpenModal: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ onOpenModal }) => {
     const { logout } = useAuth();
     const navigate = useNavigate();
-
-    const [isModalOpen, setIsModalOpen] = useState(false); // State to control modal visibility
 
     const handleLogout = () => {
         logout();
         navigate('/login');
-    };
-
-    const handleOpenModal = () => {
-        setIsModalOpen(true);
-    };
-
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
     };
 
     const navLinkClass = ({ isActive }: { isActive: boolean }): string =>
@@ -65,7 +57,7 @@ const Sidebar: React.FC = () => {
                 <NavButton
                     icon={<PlusIcon className="h-5 w-5" />}
                     text="Crear Tarea"
-                    onClick={handleOpenModal}
+                    onClick={onOpenModal} // Use the prop here
                 />
 
                 <NavLink to="/settings" className={navLinkClass}>
@@ -92,10 +84,7 @@ const Sidebar: React.FC = () => {
                 </button>
             </div>
 
-            {/* Task Creation Modal */}
-            <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
-                <TaskForm />
-            </Modal>
+            {/* Removed Modal from here */}
         </aside>
     );
 };
