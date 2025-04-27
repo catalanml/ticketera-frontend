@@ -24,8 +24,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Pass the modal open handler to Sidebar */}
             <Sidebar onOpenModal={handleOpenModal} />
 
-            {/* Apply blur conditionally to the main content */}
-            <main className={`flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 ${isModalOpen ? 'blur-content' : ''}`}>
+            {/* Removed conditional blur-content class from here */}
+            <main className={`flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8`}>
                 {children}
             </main>
 
