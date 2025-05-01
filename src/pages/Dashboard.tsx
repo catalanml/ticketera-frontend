@@ -1,7 +1,13 @@
 // src/pages/Dashboard.tsx (or components, depending on your structure)
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import TaskCard from '../components/TaskCard';
 import TaskCardSkeleton from '../components/TaskCardSkeleton';
+import {
+    BoardProvider,
+    createRegistry,
+    type BoardContextValue,
+} from '../context/BoardContext'; // Import BoardProvider and related items
+import { ITask } from '../types'; // Ensure ITask is imported if not already
 
 // Define a type for your task data
 interface Task {
@@ -27,10 +33,29 @@ const fetchTasks = (): Promise<Task[]> => {
     });
 };
 
-
 const Dashboard: React.FC = () => {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    // --- Create Board Context Value ---
+    // Create a registry instance
+    const registry = useMemo(() => createRegistry(), []);
+    // Create a stable instanceId
+    const instanceId = useMemo(() => Symbol('dashboard-instance'), []);
+
+    // Placeholder functions for board operations (not functional in this context)
+    const reorderCard = () => { console.warn('reorderCard called in Dashboard - not implemented'); };
+    const moveCard = () => { console.warn('moveCard called in Dashboard - not implemented'); };
+
+    // Construct the context value
+    const boardContextValue: BoardContextValue = useMemo(() => ({
+        reorderCard,
+        moveCard,
+        registerCard: registry.cardRegistry.register,
+        registerColumn: registry.columnRegistry.register,
+        instanceId,
+    }), [registry, instanceId]); // Dependencies for useMemo
+    // --- End Board Context Value ---
 
     useEffect(() => {
         setIsLoading(true);
@@ -50,45 +75,59 @@ const Dashboard: React.FC = () => {
     const pendingTasks = tasks.filter(task => task.status === 'pendiente').length;
 
     return (
-        <div>
-            <h1 className="text-2xl font-semibold text-stone-900 dark:text-white mb-6">
-                Dashboard
-            </h1>
+        // Provide the created context value to the provider
+        <BoardProvider value={boardContextValue}>
+            <div>
+                <h1 className="text-2xl font-semibold text-stone-900 dark:text-white mb-6">
+                    Dashboard
+                </h1>
 
-            {/* Summary Section */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                {isLoading ? (
-                    <>
-                        <SummaryCardSkeleton />
-                        <SummaryCardSkeleton />
-                        <SummaryCardSkeleton />
-                    </>
-                ) : (
-                    <>
-                        <SummaryCard title="Tareas Pendientes" value={pendingTasks} />
-                        <SummaryCard title="Tareas En Progreso" value={inProgressTasks} />
-                        <SummaryCard title="Tareas Completadas" value={completedTasks} />
-                    </>
-                )}
-            </div>
+                {/* Summary Section */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                    {isLoading ? (
+                        <>
+                            <SummaryCardSkeleton />
+                            <SummaryCardSkeleton />
+                            <SummaryCardSkeleton />
+                        </>
+                    ) : (
+                        <>
+                            <SummaryCard title="Tareas Pendientes" value={pendingTasks} />
+                            <SummaryCard title="Tareas En Progreso" value={inProgressTasks} />
+                            <SummaryCard title="Tareas Completadas" value={completedTasks} />
+                        </>
+                    )}
+                </div>
 
-            {/* Task List Section */}
-            <h2 className="text-xl font-semibold text-stone-900 dark:text-white mb-4">
-                Mis Tareas Recientes
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {isLoading
-                    ? Array.from({ length: 6 }).map((_, index) => (
-                        <TaskCardSkeleton key={index} />
-                    ))
-                    : tasks.map((task) => (
-                        <TaskCard key={task.id} task={task} />
-                    ))}
-                {!isLoading && tasks.length === 0 && (
-                    <p className="text-stone-500 dark:text-white/60 col-span-full text-center py-8">No hay tareas para mostrar.</p>
-                )}
+                {/* Task List Section */}
+                <h2 className="text-xl font-semibold text-stone-900 dark:text-white mb-4">
+                    Mis Tareas Recientes
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {isLoading
+                        ? Array.from({ length: 6 }).map((_, index) => (
+                            <TaskCardSkeleton key={index} />
+                        ))
+                        : tasks.map((task) => {
+                            // Adapt the mock Task to fit ITask expected by TaskCard
+                            const taskData: ITask = {
+                                _id: task.id,
+                                title: task.title,
+                                status: task.status, // Assuming status aligns with ColumnId type
+                                priority: task.priority,
+                                description: task.summary,
+                                boardId: 'mock-dashboard-board', // Placeholder boardId
+                                order: 0, // Placeholder order
+                                // Add any other required fields from ITask with default/mock values
+                            };
+                            return <TaskCard key={task.id} task={taskData} />;
+                        })}
+                    {!isLoading && tasks.length === 0 && (
+                        <p className="text-stone-500 dark:text-white/60 col-span-full text-center py-8">No hay tareas para mostrar.</p>
+                    )}
+                </div>
             </div>
-        </div>
+        </BoardProvider>
     );
 };
 
@@ -113,6 +152,5 @@ const SummaryCardSkeleton: React.FC = () => (
         <div className="h-7 bg-stone-200 dark:bg-stone-700 rounded w-1/2"></div>
     </div>
 );
-
 
 export default Dashboard;

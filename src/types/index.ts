@@ -37,7 +37,7 @@ export interface ITask {
     order: number; // Added for task ordering within a status/column
     // Add other relevant fields like assignee, priority, dueDate, etc.
     // assignee?: IUser | string;
-    // priority?: 'Low' | 'Medium' | 'High';
+    priority?: 'Low' | 'Medium' | 'High' | 'baja' | 'media' | 'alta'; // Uncommented and added mock values
     // dueDate?: string;
     createdAt?: string;
     updatedAt?: string;
