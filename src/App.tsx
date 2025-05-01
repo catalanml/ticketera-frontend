@@ -7,6 +7,8 @@ import { useAuth } from './hooks/useAuth';
 // --- Page Imports ---
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import BoardsPage from './pages/Boards'; // Import the new Boards page
+// import BoardDetailPage from './pages/BoardDetail'; // Placeholder for future detail page
 // Import other pages/components used in routes
 import Layout from './components/Layout'; // Import the Layout component
 
@@ -52,6 +54,23 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route // Add route for Boards list
+        path="/boards"
+        element={
+          <ProtectedRoute>
+            <BoardsPage />
+          </ProtectedRoute>
+        }
+      />
+      {/* Potential route for specific board view - uncomment and implement later */}
+      {/* <Route
+        path="/boards/:boardId"
+        element={
+          <ProtectedRoute>
+            <BoardDetailPage />
+          </ProtectedRoute>
+        }
+      /> */}
       <Route
         path="/tasks"
         element={

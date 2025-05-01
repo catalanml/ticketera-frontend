@@ -10,7 +10,8 @@ import {
     ClipboardDocumentListIcon,
     Cog6ToothIcon,
     ArrowLeftOnRectangleIcon,
-    PlusIcon
+    PlusIcon,
+    ViewColumnsIcon // Import icon for Boards
 } from '@heroicons/react/24/outline';
 
 interface SidebarProps {
@@ -47,6 +48,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenModal }) => {
                 <NavLink to="/dashboard" className={navLinkClass} end>
                     <HomeIcon className="h-5 w-5" />
                     Dashboard
+                </NavLink>
+                <NavLink to="/boards" className={navLinkClass}> {/* Add Boards Link */}
+                    <ViewColumnsIcon className="h-5 w-5" />
+                    Boards
                 </NavLink>
                 <NavLink to="/tasks" className={navLinkClass}>
                     <ClipboardDocumentListIcon className="h-5 w-5" />
