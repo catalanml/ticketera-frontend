@@ -74,7 +74,10 @@ const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
     const boardContext = useBoardContext();
 
     // Determine if DnD is enabled based on whether context is null
-    const isDraggable = boardContext !== null;
+    if (!boardContext) {
+        throw new Error('TaskCard must be used within a BoardContext provider');
+    }
+    const isDraggable = true;
 
     // Safely access context values using optional chaining
     const registerCard = boardContext?.registerCard;
