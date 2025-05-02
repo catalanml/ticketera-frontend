@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { FlagIcon } from '@heroicons/react/24/solid';
-import { fetchCategories } from '../services/category/categoryService';
-import { fetchUsers } from '../services/user/userService'; // Import fetchUsers
 import { useAuth } from '../hooks/useAuth';
 import { AxiosError } from 'axios';
-// Import types from the central types file
-import { ICategory, IUser, TaskStatusEnum } from '../types';
+import { TaskStatusEnum, CreateTaskDTO, ITask } from '../types';
+import { createTask } from '../services/task/taskService';
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { useTaskFormData } from '../hooks/useTaskFormData';
+import { useTaskContext } from '../hooks/useTaskContext'; // Import from the new hook file
+import toast from 'react-hot-toast';
 
 
-// Define priorities - color class will be determined by helper function
-const priorities = [
+// Define priorities with both level and name
+const priorities: { level: number; name: 'Low' | 'Medium' | 'High' }[] = [
   { level: 1, name: 'Low' },
   { level: 2, name: 'Medium' },
   { level: 3, name: 'High' },
@@ -25,125 +27,176 @@ const getPriorityColorClass = (level: number): string => {
   }
 };
 
+// Define props for the component
+interface TaskFormProps {
+  boardId?: string; // Optional: If provided, task is added to this board, dropdown hidden
+  onTaskCreated?: (newTask: ITask) => void; // Optional: Callback after task creation
+  onClose?: () => void; // Optional: Callback to close the form/modal
+}
 
-const TaskForm: React.FC = () => {
+// Define the shape of our form data
+interface TaskFormData {
+  boardId?: string; // Only used if showBoardSelector is true
+  title: string;
+  description?: string;
+  category?: string;
+  assignedTo?: string;
+  status: TaskStatusEnum;
+  dueDate?: string;
+  priorityLevel: number; // Keep priorityLevel for the button group state
+}
+
+const TaskForm: React.FC<TaskFormProps> = ({ boardId, onTaskCreated, onClose }) => {
   const { isAuthenticated } = useAuth();
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<string>('');
-  const [categories, setCategories] = useState<ICategory[]>([]);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
-  const [errorCategories, setErrorCategories] = useState<string | null>(null);
-  const [assignedTo, setAssignedTo] = useState<string | null>(null);
-  const [users, setUsers] = useState<IUser[]>([]); // State for fetched users
-  const [isLoadingUsers, setIsLoadingUsers] = useState(true); // Loading state for users
-  const [errorUsers, setErrorUsers] = useState<string | null>(null); // Error state for users
-  const [priority, setPriority] = useState<number>(1);
-  const [status, setStatus] = useState<TaskStatusEnum>(TaskStatusEnum.ToDo);
-  const [dueDate, setDueDate] = useState<string>('');
+  const { triggerRefresh } = useTaskContext(); // Get the triggerRefresh function
+  const showBoardSelector = !boardId;
 
-  // Fetch categories effect (keep as is)
-  useEffect(() => {
-    const loadCategories = async () => {
-      setIsLoadingCategories(true);
-      setErrorCategories(null);
-      try {
-        const fetchedCategories = await fetchCategories();
-        setCategories(fetchedCategories);
-      } catch (error) {
-        console.error('Failed to load categories:', error);
-        // Use AxiosError type guard
-        if (error instanceof AxiosError && error.response?.status === 401) {
-          setErrorCategories('Authentication error. Please log in again.');
-        } else {
-          setErrorCategories('Failed to load categories. Please try again.');
-        }
-      } finally {
-        setIsLoadingCategories(false);
-      }
+  // Use the custom hook to fetch data
+  const {
+    categories, isLoadingCategories, errorCategories,
+    users, isLoadingUsers, errorUsers,
+    boards, isLoadingBoards, errorBoards
+  } = useTaskFormData(showBoardSelector);
+
+  // Setup react-hook-form
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+    watch,
+    setValue,
+  } = useForm<TaskFormData>({
+    defaultValues: {
+      title: '',
+      description: '',
+      category: '',
+      assignedTo: '',
+      status: TaskStatusEnum.ToDo,
+      dueDate: '',
+      priorityLevel: 2, // Default priority
+      boardId: boardId || '', // Pre-fill if boardId prop is provided
+    }
+  });
+
+  // Watch the priorityLevel to update the button UI
+  const currentPriorityLevel = watch('priorityLevel');
+
+  // Map priority level (number) to priority name (string)
+  const getPriorityName = (level: number): 'Low' | 'Medium' | 'High' => {
+    const foundPriority = priorities.find(p => p.level === level);
+    return foundPriority ? foundPriority.name : 'Medium'; // Default to Medium if not found
+  };
+
+  // Handle form submission using react-hook-form's handler
+  const onSubmit: SubmitHandler<TaskFormData> = async (data) => {
+    // Check authentication
+    if (!isAuthenticated) return;
+
+    // Find the priority name corresponding to the selected level
+    const priorityName = getPriorityName(data.priorityLevel);
+
+    // Construct the DTO from react-hook-form data
+    const taskData: CreateTaskDTO = {
+      title: data.title,
+      description: data.description || undefined,
+      status: data.status,
+      priority: priorityName,
+      category: data.category || undefined,
+      assignedTo: data.assignedTo || undefined,
+      dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
     };
 
-    if (isAuthenticated) { // Only fetch if authenticated
-      loadCategories();
-    } else {
-      // Optionally clear categories or set an appropriate state if user logs out
-      setCategories([]);
-      setIsLoadingCategories(false);
-      // setErrorCategories('Please log in to see categories.'); // Or keep error null
-    }
-  }, [isAuthenticated]); // Add isAuthenticated as a dependency
+    try {
+      // Determine the target board ID just before calling createTask
+      const targetBoardId = boardId || data.boardId || undefined;
+      console.log('Submitting task data:', taskData, 'for board:', targetBoardId);
+      const newTask = await createTask(taskData, targetBoardId);
+      console.log('Task created successfully:', newTask);
 
-  // Fetch users effect
-  useEffect(() => {
-    const loadUsers = async () => {
-      setIsLoadingUsers(true);
-      setErrorUsers(null);
-      try {
-        const fetchedUsers = await fetchUsers();
-        setUsers(fetchedUsers);
-      } catch (error) {
-        console.error('Failed to load users:', error);
-        if (error instanceof AxiosError && error.response?.status === 401) {
-          setErrorUsers('Authentication error fetching users.');
-        } else {
-          setErrorUsers('Failed to load users.');
+      reset(); // Reset form fields
+
+      onTaskCreated?.(newTask); // Call optional callback
+      onClose?.(); // Close the modal
+      triggerRefresh(); // <--- Trigger the refresh signal
+
+      // Show success toast notification
+      toast.success('Task created successfully!');
+
+    } catch (error) {
+      console.error('Failed to create task:', error);
+      let errorMessage = 'Failed to create task. Please try again.';
+      if (error instanceof AxiosError) {
+        if (error.response?.status === 401) {
+          errorMessage = 'Authentication error. Please log in again.';
+        } else if (error.response?.data?.message) {
+          errorMessage = typeof error.response.data.message === 'string'
+            ? error.response.data.message
+            : JSON.stringify(error.response.data.message);
         }
-      } finally {
-        setIsLoadingUsers(false);
       }
-    };
-
-    if (isAuthenticated) { // Only fetch if authenticated
-      loadUsers();
-    } else {
-      // Clear users if not authenticated
-      setUsers([]);
-      setIsLoadingUsers(false);
+      // Show error toast notification
+      toast.error(errorMessage);
     }
-  }, [isAuthenticated]); // Add isAuthenticated as a dependency
-
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    // TODO: Implement actual task creation logic here
-    console.log({
-      name,
-      description,
-      category,
-      assignedTo,
-      priority,
-      status,
-      dueDate: dueDate ? new Date(dueDate) : null, // Convert string back to Date
-    });
-    // Reset form or close modal after submission
   };
 
   return (
     <div className="pt-0 px-4 pb-4">
       <h2 className="text-xl font-bold mb-6 text-stone-800 dark:text-stone-200">Create New Task</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Name */}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {/* Board Selector (Conditional) */}
+        {showBoardSelector && (
+          <div>
+            <label htmlFor="task-board" className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Board (Optional)</label>
+            <select
+              id="task-board"
+              // Removed required validation for boardId
+              {...register('boardId')}
+              disabled={isLoadingBoards || !!errorBoards || !isAuthenticated || isSubmitting}
+              className={`w-full px-3 py-2 border ${errors.boardId ? 'border-red-500' : 'border-stone-300 dark:border-stone-600'} rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 disabled:opacity-50`}
+            >
+              <option value="">
+                {/* Updated placeholder text */}
+                {!isAuthenticated
+                  ? 'Please log in'
+                  : isLoadingBoards
+                    ? 'Loading boards...'
+                    : errorBoards
+                      ? 'Error loading boards'
+                      : 'Select a board (Optional)'}
+              </option>
+              {isAuthenticated && !isLoadingBoards && !errorBoards && boards.map(b => (
+                <option key={b._id} value={b._id}>{b.name}</option>
+              ))}
+            </select>
+            {/* Error message for boardId is no longer needed unless other validation is added */}
+            {/* {errors.boardId && <p className="text-xs text-red-600 mt-1">{errors.boardId.message}</p>} */}
+            {errorBoards && <p className="text-xs text-red-600 mt-1">{errorBoards}</p>}
+          </div>
+        )}
+
+        {/* Title */}
         <div>
-          <label htmlFor="task-name" className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Task Name</label>
+          <label htmlFor="task-title" className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Task Title</label>
           <input
             type="text"
-            id="task-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100"
+            id="task-title"
+            {...register('title', { required: 'Task title is required.' })}
+            className={`w-full px-3 py-2 border ${errors.title ? 'border-red-500' : 'border-stone-300 dark:border-stone-600'} rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100`}
+            disabled={isSubmitting}
           />
+          {errors.title && <p className="text-xs text-red-600 mt-1">{errors.title.message}</p>}
         </div>
 
         {/* Description */}
         <div>
-          <label htmlFor="task-description" className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Description</label>
+          <label htmlFor="task-description" className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Description (Optional)</label>
           <textarea
             id="task-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            {...register('description')}
             rows={3}
-            required
             className="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100"
+            disabled={isSubmitting}
           />
         </div>
 
@@ -153,27 +206,29 @@ const TaskForm: React.FC = () => {
             <label htmlFor="task-category" className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Category</label>
             <select
               id="task-category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              required
-              disabled={isLoadingCategories || !!errorCategories || !isAuthenticated} // Also disable if not authenticated
-              className="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 disabled:opacity-50"
+              // Added required validation for category
+              {...register('category', { required: 'Please select a category.' })}
+              disabled={isLoadingCategories || !!errorCategories || !isAuthenticated || isSubmitting}
+              // Added error styling based on errors.category
+              className={`w-full px-3 py-2 border ${errors.category ? 'border-red-500' : 'border-stone-300 dark:border-stone-600'} rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 disabled:opacity-50`}
             >
-              <option value="" disabled>
+              <option value="">
+                {/* Updated placeholder text */}
                 {!isAuthenticated
                   ? 'Please log in'
                   : isLoadingCategories
-                    ? 'Loading categories...'
+                    ? 'Loading...'
                     : errorCategories
-                      ? 'Error loading'
-                      : 'Select a category'}
+                      ? 'Error'
+                      : 'Select category'}
               </option>
-              {/* Only map categories if authenticated, not loading, and no error */}
               {isAuthenticated && !isLoadingCategories && !errorCategories && categories.map(cat => (
                 <option key={cat._id} value={cat._id}>{cat.name}</option>
               ))}
             </select>
-            {errorCategories && <p className="text-xs text-red-600 mt-1">{errorCategories}</p>}
+            {/* Display validation error for category */}
+            {errors.category && <p className="text-xs text-red-600 mt-1">{errors.category.message}</p>}
+            {errorCategories && !errors.category && <p className="text-xs text-red-600 mt-1">{errorCategories}</p>}
           </div>
 
           {/* Assigned To */}
@@ -181,22 +236,19 @@ const TaskForm: React.FC = () => {
             <label htmlFor="task-assignedTo" className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Assigned To (Optional)</label>
             <select
               id="task-assignedTo"
-              value={assignedTo ?? ''}
-              onChange={(e) => setAssignedTo(e.target.value || null)}
-              // Disable if not authenticated, loading, or error
-              disabled={!isAuthenticated || isLoadingUsers || !!errorUsers}
+              {...register('assignedTo')}
+              disabled={!isAuthenticated || isLoadingUsers || !!errorUsers || isSubmitting}
               className="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 disabled:opacity-50"
             >
-              <option value="" disabled={isLoadingUsers || !!errorUsers}>
+              <option value="">
                 {!isAuthenticated
                   ? 'Please log in'
                   : isLoadingUsers
-                    ? 'Loading users...'
+                    ? 'Loading...'
                     : errorUsers
-                      ? 'Error loading users'
+                      ? 'Error'
                       : 'Unassigned'}
               </option>
-              {/* Map over fetched users */}
               {isAuthenticated && !isLoadingUsers && !errorUsers && users.map(user => (
                 <option key={user._id} value={user._id}>{user.name}</option>
               ))}
@@ -211,27 +263,26 @@ const TaskForm: React.FC = () => {
             <label htmlFor="task-status" className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Status</label>
             <select
               id="task-status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as TaskStatusEnum)}
-              required
-              className="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100"
+              {...register('status', { required: 'Status is required.' })}
+              className={`w-full px-3 py-2 border ${errors.status ? 'border-red-500' : 'border-stone-300 dark:border-stone-600'} rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100`}
+              disabled={isSubmitting}
             >
               {Object.values(TaskStatusEnum).map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+            {errors.status && <p className="text-xs text-red-600 mt-1">{errors.status.message}</p>}
           </div>
 
           {/* Due Date */}
           <div>
-            <label htmlFor="task-dueDate" className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Due Date</label>
+            <label htmlFor="task-dueDate" className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Due Date (Optional)</label>
             <input
               type="date"
               id="task-dueDate"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              required
+              {...register('dueDate')}
               className="w-full px-3 py-2 border border-stone-300 dark:border-stone-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100"
+              disabled={isSubmitting}
             />
           </div>
         </div>
@@ -239,21 +290,22 @@ const TaskForm: React.FC = () => {
         {/* Priority */}
         <div>
           <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">Priority</label>
+          <input type="hidden" {...register('priorityLevel')} />
           <div className="flex space-x-3 items-center">
             {priorities.map(p => (
               <button
                 key={p.level}
-                type="button" // Prevent form submission
-                onClick={() => setPriority(p.level)}
-                className={`flex items-center justify-center p-2 rounded-md border transition-all duration-150 ease-in-out ${priority === p.level
+                type="button"
+                onClick={() => !isSubmitting && setValue('priorityLevel', p.level, { shouldValidate: true })}
+                className={`flex items-center justify-center p-2 rounded-md border transition-all duration-150 ease-in-out ${currentPriorityLevel === p.level
                   ? 'ring-2 ring-offset-2 dark:ring-offset-stone-800 ring-indigo-500 border-indigo-500'
                   : 'border-stone-300 dark:border-stone-600 hover:border-stone-400 dark:hover:border-stone-500'
-                  }`}
+                  } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title={p.name}
+                disabled={isSubmitting}
               >
-                {/* Use helper function to get color class */}
                 <FlagIcon
-                  className={`h-5 w-5 ${getPriorityColorClass(p.level)}`} // Apply text color using helper function
+                  className={`h-5 w-5 ${getPriorityColorClass(p.level)}`}
                   aria-hidden="true"
                 />
               </button>
@@ -261,14 +313,14 @@ const TaskForm: React.FC = () => {
           </div>
         </div>
 
-
         {/* Submit Button */}
         <div className="flex justify-end pt-4">
           <button
             type="submit"
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-white dark:text-black dark:hover:bg-stone-300 dark:ring-offset-stone-800"
+            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-white dark:text-black dark:hover:bg-stone-300 dark:ring-offset-stone-800 disabled:opacity-50"
+            disabled={!isAuthenticated || isSubmitting}
           >
-            Create Task
+            {isSubmitting ? 'Creating...' : 'Create Task'}
           </button>
         </div>
       </form>

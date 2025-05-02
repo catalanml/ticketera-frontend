@@ -1,6 +1,6 @@
 // File: /home/lcatalan/projects/ticketera-frontend/src/components/TaskCard.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { ITask, TaskStatusEnum } from '../types'; // Import ITask and TaskStatusEnum
+import { ITask, TaskStatusEnum } from '../types';
 import invariant from 'tiny-invariant';
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
 import {
@@ -23,23 +23,21 @@ enum DropIndicator {
     Bottom,
 }
 
-// --- Styling Helper Functions (from previous code) ---
+// --- Styling Helper Functions (Updated) ---
 
 const getPriorityClasses = (priority?: ITask['priority']): string => {
     let classes = 'border-l-4 '; // Base thickness
     switch (priority) {
-        case 'baja':
+        // Removed Spanish cases to match ITask['priority'] type
         case 'Low':
             classes += 'border-l-green-500 dark:border-l-white/20';
             break;
-        case 'media':
         case 'Medium':
             classes += 'border-l-yellow-500 dark:border-l-white/50';
             break;
-        case 'alta':
         case 'High':
-            // Add animation class for high priority in dark mode
-            classes += 'border-l-red-500 dark:border-l-white/90 dark:animate-subtle-pulse';
+            // Removed dark: prefix from animate-subtle-pulse
+            classes += 'border-l-red-500 dark:border-l-white/90 animate-subtle-pulse';
             break;
         default:
             classes += 'border-l-stone-500 dark:border-l-stone-400'; // Default color
@@ -52,13 +50,13 @@ const getStatusBadgeColor = (status: ITask['status']) => {
     const statusString = typeof status === 'string' ? status.toLowerCase() : status;
     switch (statusString) {
         case TaskStatusEnum.ToDo.toLowerCase():
-        case 'pendiente': // Keep previous string value for compatibility
+            // Removed Spanish case 'pendiente'
             return 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300';
         case TaskStatusEnum.InProgress.toLowerCase():
-        case 'en progreso': // Keep previous string value
+            // Removed Spanish case 'en progreso'
             return 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300';
         case TaskStatusEnum.Done.toLowerCase():
-        case 'completada': // Keep previous string value
+            // Removed Spanish case 'completada'
             return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
         default:
             return 'bg-stone-100 text-stone-800 dark:bg-stone-700 dark:text-stone-300';
@@ -68,15 +66,30 @@ const getStatusBadgeColor = (status: ITask['status']) => {
 // --- TaskCard Component ---
 
 const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
-    const { registerCard, instanceId } = useBoardContext();
     const ref = useRef<HTMLDivElement | null>(null);
     const [dragging, setDragging] = useState<boolean>(false);
     const [closestEdge, setClosestEdge] = useState<Edge | null>(null);
 
-    // --- Drag and Drop Effect ---
+    // Call the hook unconditionally. It returns null if not in a provider.
+    const boardContext = useBoardContext();
+
+    // Determine if DnD is enabled based on whether context is null
+    const isDraggable = boardContext !== null;
+
+    // Safely access context values using optional chaining
+    const registerCard = boardContext?.registerCard;
+    const instanceId = boardContext?.instanceId;
+
+    // --- Drag and Drop Effect (Conditional) ---
     useEffect(() => {
+        // Only run the effect if DnD is enabled (context exists)
+        if (!isDraggable || !registerCard || !instanceId) {
+            return; // Do nothing if not draggable
+        }
+
         const element = ref.current;
-        invariant(element);
+        // Invariant check remains useful here to ensure the ref is connected
+        invariant(element, 'TaskCard ref is not assigned');
 
         const dragData = {
             taskId: task._id,
@@ -85,6 +98,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
             type: 'card',
         };
 
+        // Combine DnD functionalities
         return combine(
             registerCard(task._id, { element }),
             draggable({
@@ -95,11 +109,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
                         nativeSetDragImage,
                         getOffset: pointerOutsideOfPreview({ x: '8px', y: '8px' }),
                         render({ container }) {
-                            // Clone the element for preview
                             const preview = element.cloneNode(true) as HTMLElement;
-                            // Reduce opacity for preview
                             preview.style.opacity = '0.8';
-                            // Remove dynamic classes like drop indicators from the preview if needed
                             preview.classList.remove('-top-2', '-bottom-2');
                             container.appendChild(preview);
                             return () => preview.remove();
@@ -139,10 +150,11 @@ const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
                 },
             }),
         );
-    }, [task._id, task.status, registerCard, instanceId]);
+        // Dependencies: run effect if task, context, or draggable status changes
+    }, [task._id, task.status, registerCard, instanceId, isDraggable]);
 
-    // --- Drop Indicator Logic ---
-    const dropIndicator = closestEdge
+    // --- Drop Indicator Logic (Conditional) ---
+    const dropIndicator = isDraggable && closestEdge
         ? closestEdge === 'top'
             ? DropIndicator.Top
             : DropIndicator.Bottom
@@ -152,33 +164,36 @@ const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
     const priorityClasses = getPriorityClasses(task.priority);
     const baseClasses = `
         block relative rounded-xl bg-white dark:bg-black p-4
-        shadow-md hover:shadow-lg transition-shadow duration-200
+        shadow-md ${isDraggable ? 'hover:shadow-lg' : ''} transition-shadow duration-200
         border border-stone-200/80 dark:border-white/10
+        ${isDraggable ? 'cursor-grab' : 'cursor-auto'} // Add grab cursor only if draggable
     `;
-    const draggingClasses = dragging ? 'opacity-40' : 'opacity-100';
+    const draggingClasses = isDraggable && dragging ? 'opacity-40' : 'opacity-100';
     const combinedClasses = `${baseClasses} ${priorityClasses} ${draggingClasses}`;
 
     // Indicator styles
-    const indicatorBaseClasses = "absolute left-0 right-0 h-1 bg-blue-600 dark:bg-blue-400 rounded z-10"; // Ensure indicator is above content
+    const indicatorBaseClasses = "absolute left-0 right-0 h-1 bg-blue-600 dark:bg-blue-400 rounded z-10";
     const topIndicatorClasses = `${indicatorBaseClasses} -top-2`;
     const bottomIndicatorClasses = `${indicatorBaseClasses} -bottom-2`;
 
     // Capitalize status for display
     const displayStatus = typeof task.status === 'string'
         ? task.status.charAt(0).toUpperCase() + task.status.slice(1)
-        : task.status; // Handle enum if needed
+        : task.status;
 
     return (
         <div
             ref={ref}
             className={combinedClasses}
             aria-label={`Task: ${task.title}`}
+            // Add draggable attribute conditionally
+            draggable={isDraggable}
         >
-            {/* Render drop indicators */}
-            {dropIndicator === DropIndicator.Top && <div className={topIndicatorClasses}></div>}
-            {dropIndicator === DropIndicator.Bottom && <div className={bottomIndicatorClasses}></div>}
+            {/* Render drop indicators only if draggable */}
+            {isDraggable && dropIndicator === DropIndicator.Top && <div className={topIndicatorClasses}></div>}
+            {isDraggable && dropIndicator === DropIndicator.Bottom && <div className={bottomIndicatorClasses}></div>}
 
-            {/* Task Content (from previous code) */}
+            {/* Task Content (remains the same) */}
             <div className="flex justify-between items-start mb-2">
                 <h4 className="text-base font-semibold text-stone-900 dark:text-white pr-2">
                     {task.title}
@@ -192,12 +207,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
                     {task.description}
                 </p>
             )}
-            {/* You can add back the priority text span if desired */}
-            {/* {task.priority && (
-                <span className="text-xs font-semibold mt-2 inline-block px-2 py-0.5 rounded bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
-                    Prioridad: {task.priority}
-                </span>
-            )} */}
         </div>
     );
 };

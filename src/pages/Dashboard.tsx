@@ -1,133 +1,98 @@
-// src/pages/Dashboard.tsx (or components, depending on your structure)
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import TaskCard from '../components/TaskCard';
 import TaskCardSkeleton from '../components/TaskCardSkeleton';
-import {
-    BoardProvider,
-    createRegistry,
-    type BoardContextValue,
-} from '../context/BoardContext'; // Import BoardProvider and related items
-import { ITask } from '../types'; // Ensure ITask is imported if not already
-
-// Define a type for your task data
-interface Task {
-    id: string;
-    title: string;
-    status: 'pendiente' | 'en progreso' | 'completada';
-    priority: 'baja' | 'media' | 'alta';
-    summary?: string; // Optional summary
-}
-
-// Mock data fetching function
-const fetchTasks = (): Promise<Task[]> => {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve([
-                { id: '1', title: 'Configurar entorno de desarrollo', status: 'completada', priority: 'alta', summary: 'Instalar Node, Git, Docker...' },
-                { id: '2', title: 'Diseñar UI para Dashboard', status: 'en progreso', priority: 'media', summary: 'Crear componentes React con Tailwind.' },
-                { id: '3', title: 'Implementar autenticación', status: 'pendiente', priority: 'alta' },
-                { id: '4', title: 'Escribir pruebas unitarias', status: 'pendiente', priority: 'media', summary: 'Usar Jest y React Testing Library.' },
-                { id: '5', title: 'Desplegar aplicación en Vercel', status: 'pendiente', priority: 'baja' },
-            ]);
-        }, 1500); // Simulate network delay
-    });
-};
+import { ITask, TaskStatusEnum } from '../types';
+import { fetchTasks } from '../services/task/taskService';
+import { AxiosError } from 'axios';
+import { useTaskContext } from '../hooks/useTaskContext'; // Corrected import path
 
 const Dashboard: React.FC = () => {
-    const [tasks, setTasks] = useState<Task[]>([]);
+    const [tasks, setTasks] = useState<ITask[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-
-    // --- Create Board Context Value ---
-    // Create a registry instance
-    const registry = useMemo(() => createRegistry(), []);
-    // Create a stable instanceId
-    const instanceId = useMemo(() => Symbol('dashboard-instance'), []);
-
-    // Placeholder functions for board operations (not functional in this context)
-    const reorderCard = () => { console.warn('reorderCard called in Dashboard - not implemented'); };
-    const moveCard = () => { console.warn('moveCard called in Dashboard - not implemented'); };
-
-    // Construct the context value
-    const boardContextValue: BoardContextValue = useMemo(() => ({
-        reorderCard,
-        moveCard,
-        registerCard: registry.cardRegistry.register,
-        registerColumn: registry.columnRegistry.register,
-        instanceId,
-    }), [registry, instanceId]); // Dependencies for useMemo
-    // --- End Board Context Value ---
+    const [error, setError] = useState<string | null>(null);
+    const { refreshKey } = useTaskContext(); // Get the refreshKey from context
 
     useEffect(() => {
+        console.log('Dashboard: Fetching tasks due to mount or refreshKey change...'); // Optional: for debugging
         setIsLoading(true);
+        setError(null);
         fetchTasks()
             .then((data) => {
                 setTasks(data);
-                setIsLoading(false);
             })
-            .catch(error => {
-                console.error("Error fetching tasks:", error);
-                setIsLoading(false); // Stop loading even if there's an error
+            .catch(err => {
+                console.error("Error fetching tasks:", err);
+                let message = "Failed to load tasks. Please try again.";
+                if (err instanceof AxiosError) {
+                    if (err.response?.status === 401) {
+                        message = "Authentication error. Please log in again.";
+                    } else if (err.response?.data?.message) {
+                        // Ensure message is a string
+                        message = typeof err.response.data.message === 'string'
+                            ? err.response.data.message
+                            : JSON.stringify(err.response.data.message);
+                    }
+                } else if (err instanceof Error) {
+                    message = err.message;
+                }
+                setError(message);
+            })
+            .finally(() => {
+                setIsLoading(false);
             });
-    }, []);
+    }, [refreshKey]); // Add refreshKey to the dependency array
 
-    const completedTasks = tasks.filter(task => task.status === 'completada').length;
-    const inProgressTasks = tasks.filter(task => task.status === 'en progreso').length;
-    const pendingTasks = tasks.filter(task => task.status === 'pendiente').length;
+    const completedTasks = tasks.filter(task => task.status === TaskStatusEnum.Done).length;
+    const inProgressTasks = tasks.filter(task => task.status === TaskStatusEnum.InProgress).length;
+    const pendingTasks = tasks.filter(task => task.status === TaskStatusEnum.ToDo).length;
 
     return (
-        // Provide the created context value to the provider
-        <BoardProvider value={boardContextValue}>
-            <div>
-                <h1 className="text-2xl font-semibold text-stone-900 dark:text-white mb-6">
-                    Dashboard
-                </h1>
+        <div>
+            <h1 className="text-2xl font-semibold text-stone-900 dark:text-white mb-6">
+                Dashboard
+            </h1>
 
-                {/* Summary Section */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                    {isLoading ? (
-                        <>
-                            <SummaryCardSkeleton />
-                            <SummaryCardSkeleton />
-                            <SummaryCardSkeleton />
-                        </>
-                    ) : (
-                        <>
-                            <SummaryCard title="Tareas Pendientes" value={pendingTasks} />
-                            <SummaryCard title="Tareas En Progreso" value={inProgressTasks} />
-                            <SummaryCard title="Tareas Completadas" value={completedTasks} />
-                        </>
-                    )}
+            {/* Display Error Message */}
+            {error && (
+                <div className="mb-4 p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900/30 dark:text-red-300" role="alert">
+                    {error}
                 </div>
+            )}
 
-                {/* Task List Section */}
-                <h2 className="text-xl font-semibold text-stone-900 dark:text-white mb-4">
-                    Mis Tareas Recientes
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {isLoading
-                        ? Array.from({ length: 6 }).map((_, index) => (
-                            <TaskCardSkeleton key={index} />
-                        ))
-                        : tasks.map((task) => {
-                            // Adapt the mock Task to fit ITask expected by TaskCard
-                            const taskData: ITask = {
-                                _id: task.id,
-                                title: task.title,
-                                status: task.status, // Assuming status aligns with ColumnId type
-                                priority: task.priority,
-                                description: task.summary,
-                                boardId: 'mock-dashboard-board', // Placeholder boardId
-                                order: 0, // Placeholder order
-                                // Add any other required fields from ITask with default/mock values
-                            };
-                            return <TaskCard key={task.id} task={taskData} />;
-                        })}
-                    {!isLoading && tasks.length === 0 && (
-                        <p className="text-stone-500 dark:text-white/60 col-span-full text-center py-8">No hay tareas para mostrar.</p>
-                    )}
-                </div>
+            {/* Summary Section */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                {isLoading ? (
+                    <>
+                        <SummaryCardSkeleton />
+                        <SummaryCardSkeleton />
+                        <SummaryCardSkeleton />
+                    </>
+                ) : (
+                    <>
+                        <SummaryCard title="Tareas Pendientes" value={pendingTasks} />
+                        <SummaryCard title="Tareas En Progreso" value={inProgressTasks} />
+                        <SummaryCard title="Tareas Completadas" value={completedTasks} />
+                    </>
+                )}
             </div>
-        </BoardProvider>
+
+            {/* Task List Section */}
+            <h2 className="text-xl font-semibold text-stone-900 dark:text-white mb-4">
+                Mis Tareas Recientes
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {isLoading
+                    ? Array.from({ length: 6 }).map((_, index) => (
+                        <TaskCardSkeleton key={index} />
+                    ))
+                    : tasks.map((task) => (
+                        <TaskCard key={task._id} task={task} />
+                    ))}
+                {!isLoading && !error && tasks.length === 0 && (
+                    <p className="text-stone-500 dark:text-white/60 col-span-full text-center py-8">No hay tareas para mostrar.</p>
+                )}
+            </div>
+        </div>
     );
 };
 
@@ -152,5 +117,6 @@ const SummaryCardSkeleton: React.FC = () => (
         <div className="h-7 bg-stone-200 dark:bg-stone-700 rounded w-1/2"></div>
     </div>
 );
+
 
 export default Dashboard;

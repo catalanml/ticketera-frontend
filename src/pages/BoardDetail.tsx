@@ -4,6 +4,8 @@ import { useParams } from 'react-router-dom';
 import { IBoard, ITask, IStatus } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import Column from '../components/Column';
+import Modal from '../components/Modal';
+import TaskForm from '../components/TaskForm';
 import { AxiosError } from 'axios';
 import invariant from 'tiny-invariant';
 
@@ -14,7 +16,7 @@ import type { Edge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/types';
 import { getReorderDestinationIndex } from '@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index';
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import { reorder } from '@atlaskit/pragmatic-drag-and-drop/reorder';
+import { reorder as reorderItems } from '@atlaskit/pragmatic-drag-and-drop/reorder'; // Renamed import
 
 // Board Context and Registry
 import { BoardProvider, createRegistry, BoardContextValue } from '../context/BoardContext';
@@ -24,7 +26,7 @@ interface BoardColumn extends IStatus {
     tasks: ITask[];
 }
 
-// Type for the board state, similar to the example
+// Type for the board state
 type BoardState = {
     columnMap: { [key: string]: BoardColumn };
     orderedColumnIds: string[];
@@ -33,23 +35,21 @@ type BoardState = {
 const BoardDetail: React.FC = () => {
     const { boardId } = useParams<{ boardId: string }>();
     const { isAuthenticated } = useAuth();
-    const [boardInfo, setBoardInfo] = useState<IBoard | null>(null); // Store board metadata separately
+    const [boardInfo, setBoardInfo] = useState<IBoard | null>(null);
     const [boardState, setBoardState] = useState<BoardState | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
 
-    // Use useRef to keep a stable reference to the latest board state for the monitor
     const stableBoardState = useRef(boardState);
     useEffect(() => {
         stableBoardState.current = boardState;
     }, [boardState]);
 
-    // Create registry instance
-    const [registry] = useState(() => createRegistry());
-    // Create a unique ID for this board instance
+    const [dndRegistry] = useState(() => createRegistry());
     const [instanceId] = useState(() => Symbol('board-instance'));
 
-    const loadBoardDetails = useCallback(async () => {
+    const fetchAndSetBoardDetails = useCallback(async () => {
         if (!isAuthenticated || !boardId) {
             setError("Authentication required or Board ID missing.");
             setIsLoading(false);
@@ -58,45 +58,51 @@ const BoardDetail: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            // --- Placeholder Data --- (Keep for now)
-            // Corrected: Use createdBy instead of owner
-            const placeholderBoard: IBoard = { _id: boardId!, name: 'Loading Board...', description: '', createdBy: 'placeholder-user-id', createdAt: '', updatedAt: '' };
+            // TODO: Replace with actual API calls
+            // Fetch board info, statuses, and tasks for the boardId
+            // const fetchedBoardInfo = await fetchBoardById(boardId);
+            // const fetchedStatuses = await fetchStatusesByBoardId(boardId);
+            // const fetchedTasks = await fetchTasksByBoardId(boardId);
+
+            // --- Placeholder Data --- (Remove when API calls are implemented)
+            const placeholderBoard: IBoard = { _id: boardId!, name: 'Placeholder Board', description: 'This is a placeholder board.', createdBy: 'placeholder-user-id', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
             const placeholderStatuses: IStatus[] = [
-                // Added missing properties based on IStatus type update
                 { _id: 'todo', name: 'To Do', boardId: boardId!, order: 0 },
                 { _id: 'inprogress', name: 'In Progress', boardId: boardId!, order: 1 },
                 { _id: 'done', name: 'Done', boardId: boardId!, order: 2 },
             ];
             const placeholderTasks: ITask[] = [
-                // Added missing properties based on ITask type update
-                { _id: 'task-1', title: 'Task 1', description: 'Desc 1', status: 'todo', boardId: boardId!, order: 0 },
-                { _id: 'task-2', title: 'Task 2', description: 'Desc 2', status: 'todo', boardId: boardId!, order: 1 },
-                { _id: 'task-3', title: 'Task 3', description: 'Desc 3', status: 'inprogress', boardId: boardId!, order: 0 },
+                { _id: 'task-1', title: 'Task 1', description: 'Desc 1', status: 'todo', boardId: boardId!, order: 0, priority: 'Medium', createdBy: 'user-1' },
+                { _id: 'task-2', title: 'Task 2', description: 'Desc 2', status: 'todo', boardId: boardId!, order: 1, priority: 'Low', createdBy: 'user-1' },
+                { _id: 'task-3', title: 'Task 3', description: 'Desc 3', status: 'inprogress', boardId: boardId!, order: 0, priority: 'High', createdBy: 'user-2' },
             ];
             setBoardInfo(placeholderBoard);
             // --- End Placeholder Data ---
 
             // Process data into the BoardState structure
             const columnsMap: { [key: string]: BoardColumn } = {};
-            // Sort statuses by order (should now work)
-            const orderedIds = placeholderStatuses
+            const orderedIds = placeholderStatuses // Use fetchedStatuses when API is ready
                 .sort((a, b) => a.order - b.order)
                 .map(status => {
                     columnsMap[status._id] = { ...status, tasks: [] };
                     return status._id;
                 });
 
-            placeholderTasks.forEach(task => {
-                // Ensure task.status is a string key
-                // Simplified: Assuming task.status will be the string ID here
+            placeholderTasks.forEach(task => { // Use fetchedTasks when API is ready
                 const statusKey = task.status as string;
                 const column = columnsMap[statusKey];
                 if (column) {
+                    // Ensure task has an order property before pushing
+                    if (typeof task.order !== 'number') {
+                        console.warn(`Task ${task._id} is missing 'order' property. Assigning default 0.`);
+                        task.order = column.tasks.length; // Assign order based on current length
+                    }
                     column.tasks.push(task);
+                } else {
+                    console.warn(`Task ${task._id} has status '${statusKey}' which does not match any column.`);
                 }
             });
 
-            // Ensure tasks within columns are sorted by their order (should now work)
             Object.values(columnsMap).forEach(column => {
                 column.tasks.sort((a, b) => a.order - b.order);
             });
@@ -118,11 +124,18 @@ const BoardDetail: React.FC = () => {
     }, [boardId, isAuthenticated]);
 
     useEffect(() => {
-        loadBoardDetails();
-    }, [loadBoardDetails]);
+        fetchAndSetBoardDetails();
+    }, [fetchAndSetBoardDetails]);
 
-    // --- State Update Functions (Implement based on example) ---
+    const handleOpenCreateTaskModal = () => setIsCreateTaskModalOpen(true);
+    const handleCloseCreateTaskModal = () => setIsCreateTaskModalOpen(false);
 
+    const handleTaskCreated = useCallback(() => {
+        console.log("Task created, refetching board details...");
+        fetchAndSetBoardDetails();
+    }, [fetchAndSetBoardDetails]);
+
+    // --- State Update Functions ---
     const reorderCard = useCallback(
         ({
             columnId,
@@ -132,21 +145,20 @@ const BoardDetail: React.FC = () => {
             columnId: string;
             startIndex: number;
             finishIndex: number;
-            trigger?: 'pointer' | 'keyboard';
+            trigger?: 'pointer' | 'keyboard'; // trigger is unused currently, but kept for potential future use
         }) => {
             setBoardState((currentState) => {
                 if (!currentState) return null;
 
                 const sourceColumn = currentState.columnMap[columnId];
-                if (!sourceColumn) return currentState; // Column not found
+                if (!sourceColumn) return currentState;
 
-                const updatedItems = reorder({
+                const updatedItems = reorderItems({
                     list: sourceColumn.tasks,
                     startIndex,
                     finishIndex,
                 });
 
-                // Update order property for persistence
                 const updatedTasksWithOrder = updatedItems.map((task, index) => ({
                     ...task,
                     order: index,
@@ -163,24 +175,25 @@ const BoardDetail: React.FC = () => {
                 };
 
                 // TODO: API Call to update task order for all affected tasks in this column
-                console.log('Reordering in column:', columnId, updatedTasksWithOrder);
+                console.log('Reordering in column:', columnId, updatedTasksWithOrder.map(t => ({ id: t._id, order: t.order })));
 
-                // Flash effect on the moved card
                 const finalItem = updatedTasksWithOrder[finishIndex];
                 if (finalItem) {
-                    const cardEntry = registry.cardRegistry.getCard(finalItem._id);
+                    const cardEntry = dndRegistry.cardRegistry.getCard(finalItem._id);
                     if (cardEntry) {
                         triggerPostMoveFlash(cardEntry.element);
                     }
                 }
 
+                // Ensure the return type matches BoardState
                 return {
                     ...currentState,
                     columnMap: updatedMap,
+                    orderedColumnIds: currentState.orderedColumnIds // Keep orderedColumnIds
                 };
             });
         },
-        [registry.cardRegistry], // Dependency on registry
+        [dndRegistry.cardRegistry],
     );
 
     const moveCard = useCallback(
@@ -194,21 +207,20 @@ const BoardDetail: React.FC = () => {
             finishColumnId: string;
             itemIndexInStartColumn: number;
             itemIndexInFinishColumn?: number;
-            trigger?: 'pointer' | 'keyboard';
+            trigger?: 'pointer' | 'keyboard'; // trigger is unused currently
         }) => {
-            // Invalid cross column movement (should be handled by drop logic, but double check)
             if (startColumnId === finishColumnId) {
-                return;
+                return; // Should not happen if logic is correct, but good safeguard
             }
             setBoardState((currentState) => {
                 if (!currentState) return null;
 
                 const sourceColumn = currentState.columnMap[startColumnId];
                 const destinationColumn = currentState.columnMap[finishColumnId];
-                if (!sourceColumn || !destinationColumn) return currentState; // Columns not found
+                if (!sourceColumn || !destinationColumn) return currentState;
 
                 const item: ITask | undefined = sourceColumn.tasks[itemIndexInStartColumn];
-                if (!item) return currentState; // Item not found
+                if (!item) return currentState;
 
                 // Remove from source
                 const newSourceTasks = sourceColumn.tasks.filter((i) => i._id !== item._id);
@@ -219,10 +231,9 @@ const BoardDetail: React.FC = () => {
 
                 // Add to destination
                 const destinationItems = Array.from(destinationColumn.tasks);
-                const newIndexInDestination = itemIndexInFinishColumn ?? destinationItems.length; // Append if no index
+                const newIndexInDestination = itemIndexInFinishColumn ?? destinationItems.length;
 
-                // Update status and insert
-                const movedItem = { ...item, status: finishColumnId };
+                const movedItem = { ...item, status: finishColumnId }; // Update status
                 destinationItems.splice(newIndexInDestination, 0, movedItem);
                 const updatedDestinationTasksWithOrder = destinationItems.map((task, index) => ({
                     ...task,
@@ -243,33 +254,32 @@ const BoardDetail: React.FC = () => {
 
                 // TODO: API Call to update the task's status and order
                 console.log(`Moving task ${item._id} to column ${finishColumnId} at index ${newIndexInDestination}`);
-                console.log('New order in target column:', updatedDestinationTasksWithOrder);
-                console.log('New order in source column:', updatedSourceTasksWithOrder);
+                console.log('New order in target column:', updatedDestinationTasksWithOrder.map(t => ({ id: t._id, order: t.order })));
+                console.log('New order in source column:', updatedSourceTasksWithOrder.map(t => ({ id: t._id, order: t.order })));
 
-                // Flash effect on the moved card
                 const finalItem = updatedDestinationTasksWithOrder[newIndexInDestination];
                 if (finalItem) {
-                    // Need a slight delay for the flash to work after potential re-render
                     setTimeout(() => {
-                        const cardEntry = registry.cardRegistry.getCard(finalItem._id);
+                        const cardEntry = dndRegistry.cardRegistry.getCard(finalItem._id);
                         if (cardEntry) {
                             triggerPostMoveFlash(cardEntry.element);
                         }
                     }, 0);
                 }
 
+                // Ensure the return type matches BoardState
                 return {
                     ...currentState,
                     columnMap: updatedMap,
+                    orderedColumnIds: currentState.orderedColumnIds // Keep orderedColumnIds
                 };
             });
         },
-        [registry.cardRegistry], // Dependency on registry
+        [dndRegistry.cardRegistry],
     );
 
     // --- Drag and Drop Monitor Effect ---
     useEffect(() => {
-        // Ensure boardState is loaded before setting up monitor
         if (!boardState) {
             return;
         }
@@ -277,44 +287,34 @@ const BoardDetail: React.FC = () => {
         return combine(
             monitorForElements({
                 canMonitor({ source }) {
-                    // Only monitor drags originating from this board instance
                     return source.data.instanceId === instanceId;
                 },
                 onDrop(args) {
                     const { location, source } = args;
-                    const currentBoardState = stableBoardState.current; // Use the ref here
+                    const currentBoardState = stableBoardState.current;
 
-                    // Didn't drop on anything valid
                     if (!location.current.dropTargets.length || !currentBoardState) {
                         return;
                     }
 
-                    // Dragging a card
                     if (source.data.type === 'card') {
-                        const taskId = source.data.taskId;
-                        invariant(typeof taskId === 'string');
-
-                        const startColumnId = source.data.columnId;
-                        invariant(typeof startColumnId === 'string');
-
+                        const taskId = source.data.taskId as string;
+                        const startColumnId = source.data.columnId as string;
                         const sourceColumn = currentBoardState.columnMap[startColumnId];
                         const itemIndex = sourceColumn.tasks.findIndex((task) => task._id === taskId);
-                        if (itemIndex < 0) return; // Item not found in source column
+                        if (itemIndex < 0) return;
 
-                        // Dropping on a column (directly)
                         if (location.current.dropTargets.length === 1) {
                             const [destinationColumnRecord] = location.current.dropTargets;
-                            const destinationColumnId = destinationColumnRecord.data.columnId;
-                            invariant(typeof destinationColumnId === 'string');
+                            const destinationColumnId = destinationColumnRecord.data.columnId as string;
                             const destinationColumn = currentBoardState.columnMap[destinationColumnId];
-                            invariant(destinationColumn);
+                            invariant(destinationColumn, 'Could not find destination column');
 
-                            // Reordering in same column (dropped on column, goes to last position)
                             if (startColumnId === destinationColumnId) {
                                 const destinationIndex = getReorderDestinationIndex({
                                     startIndex: itemIndex,
-                                    indexOfTarget: sourceColumn.tasks.length - 1, // Target is the last item
-                                    closestEdgeOfTarget: null, // Dropped on column, not edge
+                                    indexOfTarget: sourceColumn.tasks.length - 1,
+                                    closestEdgeOfTarget: null,
                                     axis: 'vertical',
                                 });
                                 reorderCard({
@@ -326,38 +326,32 @@ const BoardDetail: React.FC = () => {
                                 return;
                             }
 
-                            // Moving card to a new column (dropped on column, goes to last position)
                             moveCard({
                                 itemIndexInStartColumn: itemIndex,
                                 startColumnId: startColumnId,
                                 finishColumnId: destinationColumnId,
-                                itemIndexInFinishColumn: destinationColumn.tasks.length, // Append to end
+                                itemIndexInFinishColumn: destinationColumn.tasks.length,
                                 trigger: 'pointer',
                             });
                             return;
                         }
 
-                        // Dropping on a card (relative position)
                         if (location.current.dropTargets.length === 2) {
                             const [destinationCardRecord, destinationColumnRecord] = location.current.dropTargets;
-                            const destinationColumnId = destinationColumnRecord.data.columnId;
-                            invariant(typeof destinationColumnId === 'string');
+                            const destinationColumnId = destinationColumnRecord.data.columnId as string;
                             const destinationColumn = currentBoardState.columnMap[destinationColumnId];
-                            invariant(destinationColumn);
+                            invariant(destinationColumn, 'Could not find destination column');
 
-                            const targetTaskId = destinationCardRecord.data.taskId;
-                            invariant(typeof targetTaskId === 'string');
-
+                            const targetTaskId = destinationCardRecord.data.taskId as string;
                             const indexOfTarget = destinationColumn.tasks.findIndex(
                                 (task) => task._id === targetTaskId,
                             );
-                            if (indexOfTarget < 0) return; // Target card not found
+                            if (indexOfTarget < 0) return;
 
                             const closestEdgeOfTarget: Edge | null = extractClosestEdge(
                                 destinationCardRecord.data,
                             );
 
-                            // Case 1: Reordering in the same column
                             if (startColumnId === destinationColumnId) {
                                 const destinationIndex = getReorderDestinationIndex({
                                     startIndex: itemIndex,
@@ -374,7 +368,6 @@ const BoardDetail: React.FC = () => {
                                 return;
                             }
 
-                            // Case 2: Moving into a new column relative to a card
                             const destinationIndex =
                                 closestEdgeOfTarget === 'bottom' ? indexOfTarget + 1 : indexOfTarget;
 
@@ -390,46 +383,67 @@ const BoardDetail: React.FC = () => {
                 },
             }),
         );
-    }, [boardState, instanceId, moveCard, reorderCard]); // Rerun monitor setup if boardState or callbacks change
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [instanceId, moveCard, reorderCard, dndRegistry]);
 
-    // --- Context Value --- (Memoize to prevent unnecessary re-renders)
+    // --- Context Value ---
     const contextValue: BoardContextValue = useMemo(() => ({
         reorderCard,
         moveCard,
-        registerCard: registry.cardRegistry.register,
-        registerColumn: registry.columnRegistry.register,
+        registerCard: dndRegistry.cardRegistry.register,
+        registerColumn: dndRegistry.columnRegistry.register,
         instanceId,
-    }), [reorderCard, moveCard, registry.cardRegistry, registry.columnRegistry, instanceId]);
+    }), [reorderCard, moveCard, dndRegistry.cardRegistry, dndRegistry.columnRegistry, instanceId]);
 
-
+    // --- Render Logic ---
     if (isLoading) {
+        // Corrected className quotes
         return <div className="p-4 text-center text-stone-500 dark:text-stone-400">Loading board...</div>;
     }
 
     if (error) {
+        // Corrected className quotes
         return <div className="p-4 text-center text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 rounded">{error}</div>;
     }
 
-    if (!boardInfo || !boardState) { // Check both boardInfo and boardState
+    if (!boardInfo || !boardState) {
+        // Corrected className quotes
         return <div className="p-4 text-center text-stone-500 dark:text-stone-400">Board data not available.</div>;
     }
 
+    // Component now returns JSX, satisfying React.FC
     return (
-        <BoardProvider value={contextValue}> {/* Wrap with context provider */}
-            <div className="p-4">
-                <h1 className="text-2xl font-semibold mb-1 text-stone-900 dark:text-white">{boardInfo.name}</h1>
-                <p className="text-sm text-stone-600 dark:text-stone-400 mb-6">{boardInfo.description}</p>
+        <BoardProvider value={contextValue}>
+            <div className="p-4 flex flex-col h-full">
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h1 className="text-2xl font-semibold text-stone-900 dark:text-white">{boardInfo.name}</h1>
+                        <p className="text-sm text-stone-600 dark:text-stone-400">{boardInfo.description}</p>
+                    </div>
+                    <button
+                        onClick={handleOpenCreateTaskModal}
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-white dark:text-black dark:hover:bg-stone-300 dark:ring-offset-stone-800"
+                    >
+                        Add Task
+                    </button>
+                </div>
 
-                {/* Remove DndContext, DragOverlay, SortableContext */}
-                <div className="flex gap-4 overflow-x-auto pb-4">
-                    {/* Render columns based on orderedColumnIds */}
+                <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
                     {boardState.orderedColumnIds.map(columnId => {
                         const column = boardState.columnMap[columnId];
-                        if (!column) return null; // Should not happen
+                        if (!column) return null;
                         return <Column key={column._id} column={column} />;
                     })}
                 </div>
             </div>
+
+            <Modal isOpen={isCreateTaskModalOpen} onClose={handleCloseCreateTaskModal}>
+                <TaskForm
+                    boardId={boardId}
+                    onTaskCreated={handleTaskCreated}
+                    onClose={handleCloseCreateTaskModal}
+                />
+            </Modal>
         </BoardProvider>
     );
 };

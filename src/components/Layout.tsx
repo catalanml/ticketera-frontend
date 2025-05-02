@@ -31,7 +31,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
             {/* Task Creation Modal - Rendered within Layout */}
             <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
-                <TaskForm />
+                {/* Pass handleCloseModal to TaskForm */}
+                <TaskForm onClose={handleCloseModal} />
             </Modal>
         </div>
     );

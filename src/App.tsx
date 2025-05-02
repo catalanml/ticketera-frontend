@@ -3,12 +3,14 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthProvider';
 import { useAuth } from './hooks/useAuth';
+import { Toaster } from 'react-hot-toast';
+import { TaskProvider } from './context/TaskContext'; // Import TaskProvider
 
 // --- Page Imports ---
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import BoardsPage from './pages/Boards'; // Import the new Boards page
-// import BoardDetailPage from './pages/BoardDetail'; // Placeholder for future detail page
+import BoardDetailPage from './pages/BoardDetail'; // Import BoardDetailPage
 // Import other pages/components used in routes
 import Layout from './components/Layout'; // Import the Layout component
 
@@ -63,14 +65,14 @@ function AppRoutes() {
         }
       />
       {/* Potential route for specific board view - uncomment and implement later */}
-      {/* <Route
+      <Route
         path="/boards/:boardId"
         element={
           <ProtectedRoute>
             <BoardDetailPage />
           </ProtectedRoute>
         }
-      /> */}
+      />
       <Route
         path="/tasks"
         element={
@@ -116,9 +118,30 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider> {/* AuthProvider wraps everything */}
-      <Router>      {/* Router wraps the routes */}
-        <AppRoutes /> {/* Component containing route definitions */}
-      </Router>
+      <TaskProvider> {/* Wrap routes with TaskProvider */}
+        <Router>      {/* Router wraps the routes */}
+          <AppRoutes /> {/* Component containing route definitions */}
+          <Toaster // Add Toaster component here
+            position="bottom-right"
+            toastOptions={{
+              // Define default options
+              className: '',
+              duration: 5000,
+              style: {
+                background: '#333',
+                color: '#fff',
+              },
+              // Default options for specific types
+              success: {
+                duration: 3000,
+              },
+              error: {
+                duration: 5000,
+              },
+            }}
+          />
+        </Router>
+      </TaskProvider>
     </AuthProvider>
   );
 }

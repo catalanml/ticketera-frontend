@@ -1,6 +1,5 @@
 // File: /home/lcatalan/projects/ticketera-frontend/src/context/BoardContext.tsx
 import React, { createContext, useContext, ReactNode } from 'react';
-import invariant from 'tiny-invariant';
 
 // Types for registry entries
 type CardEntry = { element: HTMLElement }; // Add more fields if needed (e.g., actionMenuTrigger)
@@ -75,7 +74,7 @@ export interface BoardContextValue {
 
 // Create the context
 // Using null! and checking in the hook is a common pattern
-const BoardContext = createContext<BoardContextValue>(null!); // Removed default value
+const BoardContext = createContext<BoardContextValue | null>(null); // Removed default value
 
 // Create the provider component
 interface BoardProviderProps {
@@ -88,8 +87,8 @@ export const BoardProvider: React.FC<BoardProviderProps> = ({ children, value })
 };
 
 // Create the hook to use the context
-export function useBoardContext(): BoardContextValue {
+export function useBoardContext(): BoardContextValue | null {
     const context = useContext(BoardContext);
-    invariant(context, 'useBoardContext must be used within a BoardProvider');
+    // No longer throws an error, just returns the context value (which might be null)
     return context;
 }
