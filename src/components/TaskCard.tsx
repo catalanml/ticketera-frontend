@@ -73,11 +73,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
     // Call the hook unconditionally. It returns null if not in a provider.
     const boardContext = useBoardContext();
 
-    // Determine if DnD is enabled based on whether context is null
-    if (!boardContext) {
-        throw new Error('TaskCard must be used within a BoardContext provider');
-    }
-    const isDraggable = true;
+    // Determine if DnD is enabled based on whether context is null.
+    // If boardContext is null, isDraggable will be false, and D&D features will be skipped.
+    const isDraggable = !!boardContext;
 
     // Safely access context values using optional chaining
     const registerCard = boardContext?.registerCard;
